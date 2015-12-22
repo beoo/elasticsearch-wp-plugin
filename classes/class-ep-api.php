@@ -156,7 +156,6 @@ class EP_API {
 			$response_body = wp_remote_retrieve_body( $request );
 
 			$response = json_decode( $response_body, true );
-
 			if ( $this->is_empty_search( $response ) ) {
 				return array( 'found_posts' => 0, 'posts' => array() );
 			}
@@ -831,6 +830,9 @@ class EP_API {
 	public function format_args( $args ) {
 		if ( ! empty( $args['posts_per_page'] ) ) {
 			$posts_per_page = (int) $args['posts_per_page'];
+			if ($posts_per_page == -1) {
+				$posts_per_page = 20;
+			}
 		} else {
 			$posts_per_page = (int) get_option( 'posts_per_page' );
 		}
@@ -1277,28 +1279,27 @@ class EP_API {
 
 		$search_fields = apply_filters( 'ep_search_fields', $search_fields, $args );
 
+		$terms = prepareTerms( $args['s'] );
+
 		$query = array(
 			'bool' => array(
-				'should' => array(
-					array(
-						'multi_match' => array(
-							'query' => '',
-							'fields' => $search_fields,
-							'boost' => apply_filters( 'ep_match_boost', 2, $search_fields, $args ),
-							'fuzziness' => 0,
-						)
-					),
-					array(
-						'multi_match' => array(
-							'fields' => $search_fields,
-							'query' => '',
-							'fuzziness' => apply_filters( 'ep_fuzziness_arg', 2, $search_fields, $args ),
-							'operator' => 'or',
-						),
-					)
-				),
+				'should' => array(),
 			),
 		);
+
+		foreach ($terms as $term) {
+			$query['bool']['should'][] = array(
+				'multi_match' => array(
+					'query' => $term,
+					'fuzziness' => 6,
+					'type' => 'phrase',
+					'fields' => $search_fields
+				)
+			);
+		}
+
+		$formatted_args['query'] = $query;
+
 
 		/**
 		 * We are using ep_integrate instead of ep_match_all. ep_match_all will be
@@ -1307,13 +1308,13 @@ class EP_API {
 		 * @since 1.3
 		 */
 
-		if ( ! empty( $args['s'] ) && empty( $args['ep_match_all'] ) && empty( $args['ep_integrate'] ) ) {
-			$query['bool']['should'][1]['multi_match']['query'] = $args['s'];
-			$query['bool']['should'][0]['multi_match']['query'] = $args['s'];
-			$formatted_args['query'] = $query;
-		} else if ( ! empty( $args['ep_match_all'] ) || ! empty( $args['ep_integrate'] ) ) {
-			$formatted_args['query']['match_all'] = array();
-		}
+//		if ( ! empty( $args['s'] ) && empty( $args['ep_match_all'] ) && empty( $args['ep_integrate'] ) ) {
+//			$query['bool']['should'][1]['multi_match']['query'] = $args['s'];
+//			$query['bool']['should'][0]['multi_match']['query'] = $args['s'];
+//			$formatted_args['query'] = $query;
+//		} else if ( ! empty( $args['ep_match_all'] ) || ! empty( $args['ep_integrate'] ) ) {
+//			$formatted_args['query']['match_all'] = array();
+//		}
 
 		/**
 		 * Like WP_Query in search context, if no post_type is specified we default to "any". To
@@ -1360,6 +1361,11 @@ class EP_API {
 		if ( $use_filters ) {
 			$formatted_args['filter'] = $filter;
 		}
+
+		if ($formatted_args['size'] == -1){
+			$formatted_args['size'] = 40;
+		}
+
 
 		/**
 		 * Aggregations
@@ -1748,4 +1754,36 @@ function ep_format_request_headers() {
 
 function ep_remote_request( $path, $args ) {
 	return EP_API::factory()->remote_request( $path, $args );
+}
+
+function prepareTerms( $searchstring )
+{
+	$trimmed = array();
+	$unfiltered = array();
+
+	if (is_string( $searchstring )) {
+		$decode = html_entity_decode( $searchstring );
+		$explode = explode( ',', $decode );
+
+
+		foreach ($explode as $term) {
+			$a = trim( $term );
+			if (!empty( $a )) {
+				$trimmed[] = $a;
+			}
+			continue;
+		}
+
+		foreach ($trimmed as $t) {
+			$filter = explode( ':', $t );
+			if (count( $filter ) > 1) {
+				$unfiltered[] = $filter[1];
+			} else {
+				$unfiltered[] = $filter[0];
+			}
+		}
+	}
+
+	return $unfiltered;
+
 }

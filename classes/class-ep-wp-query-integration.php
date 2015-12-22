@@ -257,7 +257,7 @@ class EP_WP_Query_Integration {
 
 		if( count( $new_posts ) < 1 ) {
 
-			$scope = 'current';
+			$scope = 'all';
 			if ( ! empty( $query_vars['sites'] ) ) {
 				$scope = $query_vars['sites'];
 			}
