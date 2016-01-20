@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Plugin Name: ElasticPress
+ * Plugin Name: elasticsearch-wp-plugin
  * Description: Integrate WordPress search with Elasticsearch
  * Version:     1.7
  * Author:      Aaron Holbrook, Taylor Lovett, Matt Gross, 10up
